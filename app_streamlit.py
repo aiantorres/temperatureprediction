@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 
 
+
 # Configuración de la página de Streamlit
 
 st.set_page_config(page_title="Aplicación de predicción ",
@@ -19,12 +20,12 @@ st.set_page_config(page_title="Aplicación de predicción ",
                    initial_sidebar_state="auto")
 
 st.title("Predicción de Temperatura usando Prophet")
-st.markdown("""Está aplicación predice la temperatura en grados celsius según los parámetros que se introducen""")
+st.markdown("""Está aplicación predice la temperatura en grados celsius según los días que se quieran predecir""")
 st.markdown("""--------""")
 
 logo="./img/temperatura.png"
 st.sidebar.image(logo, width=150, use_column_width="auto")
-st.sidebar.header('   Datos ingresados por el usuario',divider='rainbow')
+st.sidebar.header(' ',divider='rainbow')
 
 
 data=pd.read_excel(r"C:\Users\usuario\OneDrive\Documents\GitHub\temperatureprediction\data\raw\Estaciones_control_datos_meteorologicos.xls",index_col=0)  
@@ -60,30 +61,34 @@ with col2:
         popup_content = f"Estación: {row['ESTACIÓN']}"
         forecast = generar_prediccion(dias_para_pronosticar)
         
-        forecast_futuro = forecast[forecast['ds'] >= hoy]
-        for i in range(dias_popup):
-            popup_content += f"<br>{forecast_futuro['ds'].iloc[i].date()}: {forecast_futuro['yhat'].iloc[i]:.2f}°C"
-        
         def determinar_color(valor):
-                if valor < 10:
+                if valor < 10.00:
                     return 'blue'        # Frío extremo
-                elif valor < 15:
+                elif valor < 15.00:
                     return 'lightblue'   # Frío
-                elif valor < 20:
+                elif valor < 20.00:
                     return 'yellow'      # Templado
-                elif valor < 25:
+                elif valor < 25.00:
                     return 'orange'      # Caliente
                 else:
                     return 'red'         # Caliente extremo
-
-        prediccion_dia_actual = forecast_futuro['yhat'].iloc[0]
-        color_icono = determinar_color(prediccion_dia_actual)
         
-        folium.Marker(
-            location=[row['LATITUD'], row['LONGITUD']],
-            popup=popup_content,
-            icon = folium.Icon(color=color_icono)
-        ).add_to(m)
-
-    
+        forecast_futuro = forecast[forecast['ds'] >= hoy]
+        if not forecast_futuro.empty:
+            for i in range(dias_popup):
+                popup_content += f"<br>{forecast_futuro['ds'].iloc[i].date()}: {forecast_futuro['yhat'].iloc[i]:.2f}°C"
+        
+            prediccion_dia_actual = forecast_futuro['yhat'].iloc[0]
+            
+            color_icono = determinar_color(prediccion_dia_actual)
+            
+            folium.Marker(
+                location=[row['LATITUD'], row['LONGITUD']],
+                popup=popup_content,
+                icon = folium.Icon(icon_color=color_icono)
+            ).add_to(m)
+        else:
+            color_icono = 'gray'
+          
+      
     folium_static(m)
