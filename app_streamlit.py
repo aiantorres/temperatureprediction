@@ -2,16 +2,23 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
+import joblib
+import folium
+from streamlit_folium import folium_static
+from streamlit_folium import st_folium
+from prophet import Prophet
+from datetime import datetime, timedelta
+
 
 
 # Configuración de la página de Streamlit
 
 st.set_page_config(page_title="Aplicación de predicción ",
                    page_icon="",
-                   layout="centered",
+                   layout="wide",
                    initial_sidebar_state="auto")
 
-st.title("Aplicación de predicción de Temperatura")
+st.title("Predicción de Temperatura usando Prophet")
 st.markdown("""Está aplicación predice la temperatura en grados celsius según los parámetros que se introducen""")
 st.markdown("""--------""")
 
@@ -19,14 +26,64 @@ logo="./img/temperatura.png"
 st.sidebar.image(logo, width=150, use_column_width="auto")
 st.sidebar.header('   Datos ingresados por el usuario',divider='rainbow')
 
-#def input_parameter():
-#   evspsbl = st.sidebar.slider()
-data=pd.read_excel(r"C:\Users\usuario\OneDrive\Documents\GitHub\temperatureprediction\data\raw\OrlandoStation.xls",index_col=0)  
+
+data=pd.read_excel(r"C:\Users\usuario\OneDrive\Documents\GitHub\temperatureprediction\data\raw\Estaciones_control_datos_meteorologicos.xls",index_col=0)  
+
+path= r"C:\Users\usuario\OneDrive\Documents\GitHub\temperatureprediction\models\modelStationJuanCarlosI.pkl"
+modelo_entrenado = pickle.load(open(path, 'rb'))
+
+def generar_prediccion(dias):
+    future = modelo_entrenado.make_future_dataframe(periods=dias, include_history=False)
+    forecast = modelo_entrenado.predict(future)
+    return forecast
+               
+col1, espacio ,col2 = st.columns([2,0.2,2])
 
 
-st.map(data,
-    latitude='POINT_Y',
-    longitude='POINT_X',
-    size='20',
-    color='#0044ff')
-                   
+
+with col1:
+    dias_para_pronosticar = col1.slider('Número de días para pronosticar desde hoy:', 1, 365)
+    forecast = generar_prediccion(dias_para_pronosticar)
+    hoy = pd.to_datetime(datetime.today().date())
+    if col1.button('Generar Predicción'):
+        fechas_futuras = forecast[forecast['ds'] >= hoy]
+        fechas_futuras.set_index('ds', inplace=True)
+        col1.line_chart(fechas_futuras['yhat'], use_container_width=True)
+
+    
+with col2:
+    m = folium.Map(location=[40.41, -3.667], zoom_start=11)
+  
+    dias_popup = min(7, dias_para_pronosticar)
+
+    for idx, row in data.iterrows():
+        popup_content = f"Estación: {row['ESTACIÓN']}"
+        forecast = generar_prediccion(dias_para_pronosticar)
+        
+        forecast_futuro = forecast[forecast['ds'] >= hoy]
+        for i in range(dias_popup):
+            popup_content += f"<br>{forecast_futuro['ds'].iloc[i].date()}: {forecast_futuro['yhat'].iloc[i]:.2f}°C"
+        
+        def determinar_color(valor):
+                if valor < 10:
+                    return 'blue'        # Frío extremo
+                elif valor < 15:
+                    return 'lightblue'   # Frío
+                elif valor < 20:
+                    return 'yellow'      # Templado
+                elif valor < 25:
+                    return 'orange'      # Caliente
+                else:
+                    return 'red'         # Caliente extremo
+
+        prediccion_dia_actual = forecast_futuro['yhat'].iloc[0]
+        color_icono = determinar_color(prediccion_dia_actual)
+        
+        folium.Marker(
+            location=[row['LATITUD'], row['LONGITUD']],
+            popup=popup_content,
+            icon = folium.Icon(color=color_icono)
+        ).add_to(m)
+
+    
+    folium_static(m)
